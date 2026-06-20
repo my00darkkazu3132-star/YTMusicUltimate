@@ -1,17 +1,17 @@
-// DiscordRPC.xm - デバッグ版
+// DiscordRPC.xm
 #import <Foundation/Foundation.h>
-#import <objc/runtime.h>
+#import "Headers/YTPlayerViewController.h"
 
 static NSString *SERVER_URL = @"http://192.168.3.100:5000";
 
 static void sendPlayURL(NSString *videoID) {
+    if (!videoID || videoID.length == 0) return;
     NSString *ytmURL = [NSString stringWithFormat:@"https://music.youtube.com/watch?v=%@", videoID];
     NSURL *url = [NSURL URLWithString:[SERVER_URL stringByAppendingString:@"/play"]];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
     req.HTTPMethod = @"POST";
     [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    NSDictionary *body = @{@"url": ytmURL};
-    req.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+    req.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"url": ytmURL} options:0 error:nil];
     [[NSURLSession.sharedSession dataTaskWithRequest:req completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
         if (e) NSLog(@"[DiscordRPC] 送信失敗: %@", e.localizedDescription);
         else   NSLog(@"[DiscordRPC] 送信成功: %@", ytmURL);
@@ -30,54 +30,21 @@ static void sendStop(void) {
     }] resume];
 }
 
-// ===== クラス名を総当たりで探す =====
-// YTMusicのバージョンによってクラス名が変わるため、
-// "NowPlaying" を含む全クラスをログに出力する
-%ctor {
-    NSLog(@"[DiscordRPC] tweak loaded!");
+// SponsorBlock.xと同じクラス・メソッドを使う
+%hook YTPlayerViewController
 
-    int numClasses = objc_getClassList(NULL, 0);
-    Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
-    objc_getClassList(classes, numClasses);
-    for (int i = 0; i < numClasses; i++) {
-        NSString *name = NSStringFromClass(classes[i]);
-        if ([name containsString:@"Player"] || 
-            [name containsString:@"Music"] ||
-            [name containsString:@"Track"] ||
-            [name containsString:@"Playing"]) {
-            NSLog(@"[DiscordRPC] クラス発見: %@", name);
-        }
-    }
-    free(classes);
+// 曲が変わったときに呼ばれる
+- (void)playbackController:(id)arg1 didActivateVideo:(id)arg2 withPlaybackData:(id)arg3 {
+    %orig;
+    NSLog(@"[DiscordRPC] didActivateVideo 呼ばれた! videoID: %@", self.currentVideoID);
+    sendPlayURL(self.currentVideoID);
 }
 
-// とりあえず元のhookも残しておく
-%hook YTMNowPlayingViewController
-
-- (void)updateContentForItem:(id)item {
+// 一時停止・停止のタイミング
+- (void)playbackController:(id)arg1 didDeactivateVideo:(id)arg2 {
     %orig;
-    NSLog(@"[DiscordRPC] updateContentForItem 呼ばれた!");
-    @try {
-        NSString *videoID = [item valueForKey:@"videoId"];
-        if (videoID && videoID.length > 0) {
-            sendPlayURL(videoID);
-        }
-    } @catch (NSException *e) {
-        NSLog(@"[DiscordRPC] 例外: %@", e);
-    }
-}
-
-- (void)playerStateDidChange:(id)state {
-    %orig;
-    NSLog(@"[DiscordRPC] playerStateDidChange 呼ばれた!");
-    @try {
-        NSInteger playbackState = [[state valueForKey:@"playbackState"] integerValue];
-        if (playbackState == 2) {
-            sendStop();
-        }
-    } @catch (NSException *e) {
-        NSLog(@"[DiscordRPC] 例外: %@", e);
-    }
+    NSLog(@"[DiscordRPC] didDeactivateVideo 呼ばれた!");
+    sendStop();
 }
 
 %end
