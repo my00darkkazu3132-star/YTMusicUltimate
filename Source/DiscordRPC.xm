@@ -47,4 +47,16 @@ static void sendStop(void) {
     sendStop();
 }
 
+// 一時停止・再開を検知
+- (void)playbackController:(id)arg1 didChangeToPlaybackState:(int)state {
+    %orig;
+    NSLog(@"[DiscordRPC] playbackState: %d", state);
+    // state: 1=バッファ中, 2=再生中, 3=一時停止, 5=終了
+    if (state == 3 || state == 5) {
+        sendStop();
+    } else if (state == 2) {
+        sendPlayURL(self.currentVideoID);
+    }
+}
+
 %end
