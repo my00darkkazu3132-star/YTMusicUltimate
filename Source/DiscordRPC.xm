@@ -36,13 +36,15 @@ static void sendStop(void) {
 %ctor {
     NSLog(@"[DiscordRPC] tweak loaded!");
 
-    // 全クラスからNowPlaying関連を探してログに出す
     int numClasses = objc_getClassList(NULL, 0);
     Class *classes = (Class *)malloc(sizeof(Class) * numClasses);
     objc_getClassList(classes, numClasses);
     for (int i = 0; i < numClasses; i++) {
         NSString *name = NSStringFromClass(classes[i]);
-        if ([name containsString:@"NowPlaying"] || [name containsString:@"nowPlaying"]) {
+        if ([name containsString:@"Player"] || 
+            [name containsString:@"Music"] ||
+            [name containsString:@"Track"] ||
+            [name containsString:@"Playing"]) {
             NSLog(@"[DiscordRPC] クラス発見: %@", name);
         }
     }
